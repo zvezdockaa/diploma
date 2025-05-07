@@ -4,21 +4,18 @@ import openpyxl
 import pandas as pd
 from dict import country_codes
 from formula_creator import FormulaBuilder
-from db import get_connection
-
-
+from PIL import Image
+import os
 
 ctk.set_appearance_mode("Light")
 ctk.set_default_color_theme("blue")
 
-
 military_spending_file = "военные расходы.xlsx"
-
 
 militarySpending_total = 2443398.80320217  #  в миллионах долларов
 
 
-# Функция для получения данных через API World Bank
+# функция для получения данных через API World Bank
 def fetch_data_from_world_bank(country_code, indicator, year=2023):
     url = f"http://api.worldbank.org/v2/country/{country_code}/indicator/{indicator}?format=json&date={year}"
     try:
@@ -33,7 +30,7 @@ def fetch_data_from_world_bank(country_code, indicator, year=2023):
         print(f"Ошибка при получении данных: {e}")
         return None
 
-# Функция для получения данных о военных расходах из Excel
+# функция для получения данных о военных расходах
 def fetch_military_spending(filename, sheet_name, country):
     try:
         workbook = openpyxl.load_workbook(filename)
@@ -52,31 +49,31 @@ def fetch_military_spending(filename, sheet_name, country):
     except Exception as e:
         raise ValueError(f"Не удалось открыть файл: {e}")
 
-# Функция для расчета Критической Массы
+# функция для расчета критической Массы
 def get_critical_mass(country_code: str, year: int = 2023) -> float:
-    # Индикаторы
-    POPULATION = 'SP.POP.TOTL'  # Население страны
-    AREA = 'AG.SRF.TOTL.K2'     # Площадь страны
+    # индикаторы: население и площадь
+    POPULATION = 'SP.POP.TOTL'
+    AREA = 'AG.SRF.TOTL.K2'
 
-    # Получаем данные по стране
+    #  данные по стране
     country_population = fetch_data_from_world_bank(country_code, POPULATION, year)
     country_area = fetch_data_from_world_bank(country_code, AREA, year)
 
-    # Получаем данные по миру (код "WLD")
+    #  данные по миру
     world_population = fetch_data_from_world_bank("WLD", POPULATION, year)
     world_area = fetch_data_from_world_bank("WLD", AREA, year)
 
-    # Если каких-то данных нет, заменяем их на 0
+    # если каких-то данных нет, замена на 0
     country_population = country_population if country_population else 0
     country_area = country_area if country_area else 0
-    world_population = world_population if world_population else 1  # Избегаем деления на 0
-    world_area = world_area if world_area else 1  # Избегаем деления на 0
+    world_population = world_population if world_population else 1
+    world_area = world_area if world_area else 1
 
-    # Вычисляем критическую массу
+    # критическая масса по формуле
     critical_mass = (country_population / world_population) * 100 + (country_area / world_area) * 100
     return round(critical_mass, 2)
 
-# Функция для расчета показателей
+# функция для расчета показателей
 def calculate_metrics(selected_country):
     code = country_codes.get(selected_country)
     results = {}
@@ -110,10 +107,10 @@ def calculate_metrics(selected_country):
     results["Население"] = country_population or 0
     results["ВВП ППС"] = country_gdp_ppp or 0
     results["ВВП ППС на душу"] = country_gdp_ppp_per_capita or 0
-    results["Глобальный ВВП"] = global_gdp or 0
-    results["Глобальные военные расходы"] = militarySpending_total * 1_000_000
-    results["Глобальное население"] = global_population or 1
-    results["Глобальный ВВП ППС на душу"] = global_gdp_ppp_per_capita or 1
+    results["Общемировой ВВП"] = global_gdp or 0
+    results["Общемировые военные расходы"] = militarySpending_total * 1_000_000
+    results["Общемировое население"] = global_population or 1
+    results["Общемировой ВВП ППС на душу"] = global_gdp_ppp_per_capita or 1
 
     military_part = (results["Военные расходы"] * 1_000_000 / results["Глобальные военные расходы"]) * 0.29
     gdp_part = ((gdp_current * results["ВВП ППС на душу"]) / (global_gdp * results["Глобальный ВВП ППС на душу"])) * 0.1 if global_gdp and global_gdp_ppp_per_capita else 0
@@ -130,16 +127,12 @@ def calculate_metrics(selected_country):
 
     return results, error_message
 
+# функция для экспорта расчетов в Excel
 def export_to_excel(data):
-    """
-    Экспортирует данные в Excel-файл.
-    :param data: Список словарей с данными о странах.
-    """
-    try:
-        # Создаем DataFrame из списка словарей
-        df = pd.DataFrame(data)
 
-        # Сохраняем DataFrame в Excel-файл
+    try:
+        # датафрейм из списка словарей
+        df = pd.DataFrame(data)
         file_name = "exported_data.xlsx"
         df.to_excel(file_name, index=False)
 
@@ -147,7 +140,7 @@ def export_to_excel(data):
     except Exception as e:
         print(f"Ошибка при экспорте данных: {e}")
 
-
+#загрузка модели пользователя
 def evaluate_custom_formula(formula: str, data: dict) -> float:
     try:
         safe_data = {k.replace(" ", "_"): v for k, v in data.items()}
@@ -156,7 +149,7 @@ def evaluate_custom_formula(formula: str, data: dict) -> float:
     except Exception:
         return 0.0
 
-
+#основной класс приложения
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -166,9 +159,12 @@ class App(ctk.CTk):
 
         self.added_countries_data = []
         self.user_models = {}
+        self.last_notification = ""
 
         self.show_main_screen()
 
+
+    #отображение на главном экране
     def show_main_screen(self):
         for widget in self.winfo_children():
             widget.destroy()
@@ -179,7 +175,8 @@ class App(ctk.CTk):
         self.country_label = ctk.CTkLabel(selection_frame, text="Выберите страну для расчета:")
         self.country_label.pack(side="left", padx=(0, 10))
 
-        self.country_combobox = ctk.CTkComboBox(selection_frame, values=list(country_codes.keys()), state="readonly", width=400)
+        self.country_combobox = ctk.CTkComboBox(selection_frame, values=list(country_codes.keys()), state="readonly",
+                                                width=400)
         self.country_combobox.pack(side="left")
 
         button_frame = ctk.CTkFrame(self)
@@ -197,10 +194,43 @@ class App(ctk.CTk):
         self.scrollable_frame = ctk.CTkScrollableFrame(self, width=900, height=400)
         self.scrollable_frame.pack(padx=20, pady=20, fill="both", expand=True)
 
-        self.build_table_headers()
-        self.notification_label = ctk.CTkLabel(self, text="", font=("Arial", 12), anchor="ne", fg_color="orange", corner_radius=5)
-        self.notification_label.place(relx=0.95, rely=0.05, anchor="ne")
+        # колокольчик
+        bell_path = os.path.join(os.path.dirname(__file__), "bell.png")
+        if os.path.exists(bell_path):
+            image = Image.open(bell_path).resize((24, 24))
+            self.bell_icon = ctk.CTkImage(dark_image=image, light_image=image, size=(24, 24))
+            self.bell_button = ctk.CTkButton(
+                self, image=self.bell_icon, text="", width=30, height=30,
+                fg_color="transparent", hover=False, command=self.toggle_notification_popup
+            )
+            self.bell_button.place(relx=0.98, rely=0.02, anchor="ne")
 
+        self.notification_popup = None
+        self.build_table_headers()
+
+
+    # отображение уведомлений
+    def toggle_notification_popup(self):
+        if self.notification_popup and self.notification_popup.winfo_exists():
+            self.notification_popup.destroy()
+            self.notification_popup = None
+        elif self.last_notification:
+            self.notification_popup = ctk.CTkToplevel(self)
+            self.notification_popup.title("Уведомление")
+            self.notification_popup.geometry("300x100")
+            self.notification_popup.attributes("-topmost", True)
+
+            label = ctk.CTkLabel(self.notification_popup, text=self.last_notification, wraplength=280)
+            label.pack(padx=10, pady=10)
+
+            ok_button = ctk.CTkButton(self.notification_popup, text="OK", command=self.notification_popup.destroy)
+            ok_button.pack(pady=(0, 10))
+
+    def show_notification(self, message):
+        self.last_notification = message
+        print(f"Уведомление: {message}")
+
+    #заголовки таблицы
     def build_table_headers(self):
         headers = ["Страна", "ВВП (млн USD)", "Военные расходы (млн USD)", "Совокупная мощь по Чин-Лунгу", "Индекс национального потенциала"]
         headers += list(self.user_models.keys())
@@ -209,10 +239,39 @@ class App(ctk.CTk):
         for col, header in enumerate(headers):
             header_frame = ctk.CTkFrame(self.scrollable_frame)
             header_frame.grid(row=0, column=col, padx=10, pady=5, sticky="w")
+
             label = ctk.CTkLabel(header_frame, text=header, font=("Arial", 12, "bold"), anchor="w")
             label.pack(side="left")
+
+            if col > 0:
+                sort_asc_button = ctk.CTkButton(header_frame, text="▲", width=20, height=20,
+                                                fg_color=self.add_button.cget("fg_color"),
+                                                hover_color=self.add_button.cget("hover_color"),
+                                                command=lambda c=col: self.sort_table(c, ascending=True))
+                sort_asc_button.pack(side="left", padx=(5, 0))
+
+                sort_desc_button = ctk.CTkButton(header_frame, text="▼", width=20, height=20,
+                                                 fg_color=self.add_button.cget("fg_color"),
+                                                 hover_color=self.add_button.cget("hover_color")                                                 ,
+                                                 command=lambda c=col: self.sort_table(c, ascending=False))
+                sort_desc_button.pack(side="left")
+
             self.header_widgets.append(header_frame)
 
+    # сортировка показателей в таблице
+    def sort_table(self, column_index, ascending=True):
+        try:
+            self.added_countries_data.sort(
+                key=lambda x: float(x[list(x.keys())[column_index]].replace(",", "")
+                                    if isinstance(x[list(x.keys())[column_index]], str)
+                                    else x[list(x.keys())[column_index]]),
+                reverse=not ascending
+            )
+            self.redraw_table()
+        except Exception as e:
+            print(f"Ошибка при сортировке: {e}")
+
+    # добавление страны для расчета
     def add_country(self):
         selected_country = self.country_combobox.get()
         if not selected_country:
@@ -241,12 +300,14 @@ class App(ctk.CTk):
         if error:
             self.show_notification(error)
 
+    # экспорт в эксель
     def export_data(self):
         if not self.added_countries_data:
             print("Нет данных для экспорта!")
             return
         export_to_excel(self.added_countries_data)
 
+    # новая отрисовка таблицы
     def redraw_table(self):
         for widget in self.scrollable_frame.winfo_children():
             if isinstance(widget, ctk.CTkLabel) and widget not in self.header_widgets:
@@ -264,18 +325,34 @@ class App(ctk.CTk):
                 row_data.append(str(data.get(model_name, 0)))
 
             for col, value in enumerate(row_data):
-                value_label = ctk.CTkLabel(self.scrollable_frame, text=value, anchor="w")
+                fg_color = None
+                text_color = "black"
+
+                if col >= 3:
+                    fg_color = "#2fa3de"
+                    text_color = "white"
+
+                value_label = ctk.CTkLabel(
+                    self.scrollable_frame,
+                    text=value,
+                    anchor="w",
+                    fg_color=fg_color,
+                    text_color=text_color,
+                    corner_radius=5
+                )
                 value_label.grid(row=row_idx, column=col, padx=10, pady=5, sticky="w")
 
+    #открытие конструктора для пользовательских моделей
     def open_model_builder(self):
         full_metrics = [
             "ВВП", "Военные расходы", "Экономическая сила", "Военная сила", "Критическая масса",
             "Совокупная мощь по Чин-Лунгу", "Индекс национального потенциала", "Население", "ВВП ППС", "ВВП ППС на душу",
-            "Глобальный ВВП", "Глобальные военные расходы", "Глобальное население", "Глобальный ВВП ППС на душу",
+            "Общемировой ВВП", "Общемировые военные расходы", "Общемировое население", "Общемировой ВВП ППС на душу",
             "Часть ВР", "Часть ВВП", "Часть ВВП ППС", "Часть населения"
         ]
         FormulaBuilder(self, full_metrics, self.add_user_model)
 
+    # добавление пользовательской модели в таблицу
     def add_user_model(self, name, formula):
         if name in self.user_models:
             print(f"Модель '{name}' уже существует!")
@@ -288,9 +365,6 @@ class App(ctk.CTk):
             row[name] = evaluate_custom_formula(formula, base_metrics)
         self.redraw_table()
 
-    def show_notification(self, message):
-        self.notification_label.configure(text=message)
-        self.after(3000, lambda: self.notification_label.configure(text=""))
 
 if __name__ == "__main__":
     app = App()
