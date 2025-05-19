@@ -19,7 +19,8 @@ def create_table():
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS country_metrics_full (
-                country_name VARCHAR(100) PRIMARY KEY,
+                country_name VARCHAR(100),
+                year INT,
                 gdp FLOAT,
                 military_spending FLOAT,
                 economic_strength FLOAT,
@@ -37,20 +38,22 @@ def create_table():
                 gdp_part FLOAT,
                 gdp_ppp_part FLOAT,
                 population_part FLOAT,
-                national_potential_index FLOAT
+                national_potential_index FLOAT,
+                PRIMARY KEY (country_name, year)
             );
         """)
 
         connection.commit()
-        print("Таблица country_metrics_full успешно создана.")
+        print("Таблица country_metrics_full успешно создана или уже существует.")
 
     except mysql.connector.Error as err:
-        print(f"Ошибка: {err}")
+        print(f"Ошибка при создании таблицы: {err}")
 
     finally:
         if connection.is_connected():
             cursor.close()
             connection.close()
 
+# Для однократного запуска и создания таблицы
 if __name__ == "__main__":
     create_table()

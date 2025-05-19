@@ -2,6 +2,7 @@ import customtkinter as ctk
 ctk.set_appearance_mode("Light")
 from PIL import Image
 import os
+import datetime
 
 class MainView(ctk.CTk):
     def __init__(self, controller, available_countries):
@@ -17,6 +18,7 @@ class MainView(ctk.CTk):
         self.title("Оценка совокупной мощи государств")
         self.geometry("1200x600")
 
+
     def build_main_ui(self):
         for widget in self.winfo_children():
             widget.destroy()
@@ -29,9 +31,17 @@ class MainView(ctk.CTk):
 
         self.country_combobox = ctk.CTkComboBox(top_frame, values=self.available_countries, state="readonly", width=400)
         self.country_combobox.pack(side="left")
+        year_label = ctk.CTkLabel(top_frame, text="Год:")
+        year_label.pack(side="left", padx=(20, 5))
+
+        years = [str(y) for y in range(2000, datetime.datetime.now().year + 1)]
+        self.year_combobox = ctk.CTkComboBox(top_frame, values=years, state="readonly", width=100)
+        self.year_combobox.set(str(datetime.datetime.now().year))  # Текущий год по умолчанию
+        self.year_combobox.pack(side="left")
 
         button_frame = ctk.CTkFrame(self)
         button_frame.pack(padx=20, pady=10, anchor="w")
+
 
         ctk.CTkButton(button_frame, text="Добавить страну", command=self.on_add_country).grid(row=0, column=0, padx=10)
         ctk.CTkButton(button_frame, text="Экспорт в Excel", command=self.controller.export_data).grid(row=0, column=1, padx=10)
