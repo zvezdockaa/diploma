@@ -17,7 +17,7 @@ if __name__ == "__main__":
     model = CountryDataModel(get_db_connection, parser, calculator)
 
 
-    evaluator = FormulaEvaluator()
+    evaluator = FormulaEvaluator(model.metrics)
     exporter = DataExporter()
 
 

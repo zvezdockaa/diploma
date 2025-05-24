@@ -1,5 +1,6 @@
 import pandas as pd
 
+#экспорт подсчитанных данных в файл эксель
 class DataExporter:
     def export(self, data):
         try:
