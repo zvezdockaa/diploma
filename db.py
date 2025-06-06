@@ -1,18 +1,22 @@
-import mysql.connector
+import pymysql
 from dotenv import load_dotenv
 import os
 
 load_dotenv()
 
 def get_db_connection():
-    return mysql.connector.connect(
+    return pymysql.connect(
         host=os.getenv("DB_HOST"),
         user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASSWORD"),
-        database=os.getenv("DB_NAME")
+        database=os.getenv("DB_NAME"),
+        charset='utf8mb4',
+        autocommit=True,
+        cursorclass=pymysql.cursors.DictCursor  # аналог dictionary=True в mysql.connector
     )
 
 def create_table():
+    connection = None
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
@@ -43,17 +47,14 @@ def create_table():
             );
         """)
 
-        connection.commit()
         print("Таблица country_metrics_full успешно создана или уже существует.")
 
-    except mysql.connector.Error as err:
+    except Exception as err:
         print(f"Ошибка при создании таблицы: {err}")
 
     finally:
-        if connection.is_connected():
-            cursor.close()
+        if connection:
             connection.close()
 
-# Для однократного запуска и создания таблицы
 if __name__ == "__main__":
     create_table()

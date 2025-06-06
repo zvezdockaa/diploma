@@ -2,7 +2,7 @@
 class Calculator:
     def __init__(self, parser):
         self.parser = parser
-        self.military_spending_total = 2443398.80320217 * 1_000_000  # общий военный бюджет мира (можно заменить на расчёт по году)
+        self.military_spending_total = 2443398.80320217 * 1_000_000  # общий военный бюджет мира
 
     # функция расчёта критической массы страны (на основе населения и территории)
     def get_critical_mass(self, country_code, year=2023):
@@ -47,8 +47,11 @@ class Calculator:
         area = self.parser.fetch_data_from_world_bank(code, "AG.SRF.TOTL.K2", year) or 0  # площадь
 
         # мировые показатели
+        global_military_spending = self.parser.calculate_global_military_spending(year)
         global_gdp_ppp_per_capita = self.parser.fetch_data_from_world_bank("WLD", "NY.GDP.PCAP.PP.CD", year) or 1
         global_population = self.parser.fetch_data_from_world_bank("WLD", "SP.POP.TOTL", year) or 1
+
+
 
         # компоненты формулы индекса
         military_part = (military_spending * 1_000_000 / self.military_spending_total) * 0.29
@@ -72,7 +75,7 @@ class Calculator:
             "Население": population,
             "Площадь": area,
             "Глобальный ВВП": world_gdp,
-            "Глобальные военные расходы": self.military_spending_total,
+            "Глобальные военные расходы": global_military_spending,
             "Глобальный ВВП ППС на душу": global_gdp_ppp_per_capita,
             "Глобальное население": global_population,
             "Часть ВР": military_part,
@@ -80,4 +83,5 @@ class Calculator:
             "Часть ВВП ППС": gdp_ppp_part,
             "Часть населения": population_part,
             "Индекс национального потенциала": national_potential_index
+
         }, error_message

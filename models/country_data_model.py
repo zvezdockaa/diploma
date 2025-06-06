@@ -21,7 +21,7 @@ class CountryDataModel:
     def calculate_metrics(self, country_name, year):
         code = country_codes.get(country_name)
         conn = self.db_connection_factory()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
 
         # попытка получить данные из базы
         cursor.execute("SELECT * FROM country_metrics_full WHERE country_name = %s AND year = %s", (country_name, year))

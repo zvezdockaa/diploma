@@ -35,7 +35,7 @@ class Parser:
             workbook = openpyxl.load_workbook(self.military_spending_file, data_only=True)
             sheet = workbook[self.sheet_name]
 
-            # заголовки — в шестой строке
+            # заголовки - в шестой строке
             header_row = next(sheet.iter_rows(min_row=6, max_row=6, values_only=True))
             year_col_index = None
 
@@ -73,3 +73,49 @@ class Parser:
 
         except Exception as e:
             raise ValueError(f"[Parser] Ошибка при открытии файла: {e}")
+
+    def calculate_global_military_spending(self, year: int) -> float:
+        try:
+            workbook = openpyxl.load_workbook(self.military_spending_file, data_only=True)
+            sheet = workbook[self.sheet_name]
+
+            # заголовки — в шестой строке
+            header_row = next(sheet.iter_rows(min_row=6, max_row=6, values_only=True))
+            year_col_index = None
+
+            for idx, cell in enumerate(header_row):
+                if str(cell).strip() == str(year):
+                    year_col_index = idx
+                    break
+
+            if year_col_index is None:
+                return 0.0
+
+            total = 0.0
+
+            # начинаем с 7-й строки, как и раньше
+            for row in sheet.iter_rows(min_row=7, values_only=True):
+                if not row or not row[0]:
+                    continue
+
+                country_cell = str(row[0]).strip()
+                notes_cell = str(row[1]).strip() if row[1] else ""
+
+                # пропускаем подзаголовки, пустые строки
+                if notes_cell == "" and all(v in ["", None, "..."] for v in row[2:]):
+                    continue
+
+                value = row[year_col_index]
+                if value is None or str(value).strip() in ["...", "nan", ""]:
+                    continue  # просто пропускаем, не ошибка
+
+                try:
+                    numeric_value = float(str(value).replace(",", ""))
+                    total += numeric_value
+                except ValueError:
+                    continue
+
+            return total
+
+        except Exception as e:
+            raise ValueError(f"[Parser] Ошибка при расчёте мировых военных расходов: {e}")
