@@ -12,7 +12,6 @@ import time
 class MainView(ctk.CTk):
     def __init__(self, controller, available_countries):
         super().__init__()
-
         self.controller = controller
         self.available_countries = available_countries
         self.user_models = []
@@ -23,9 +22,12 @@ class MainView(ctk.CTk):
         self.loading_label = None
         self.loading_running = False
         self.loading_thread = None
+        self.pending_country = None
+        self.country_addition_in_progress = False
 
         self.title("Оценка совокупной мощи государств")
         self.geometry("1200x600")
+        self.user_model_prompt_shown = False
 
     def build_main_ui(self):
         for widget in self.winfo_children():
@@ -51,7 +53,8 @@ class MainView(ctk.CTk):
         button_frame = ctk.CTkFrame(self)
         button_frame.pack(padx=20, pady=10, anchor="w")
 
-        ctk.CTkButton(button_frame, text="Добавить страну", command=self.on_add_country).grid(row=0, column=0, padx=10)
+        self.add_country_button = ctk.CTkButton(button_frame, text="Добавить страну", command=self.on_add_country)
+        self.add_country_button.grid(row=0, column=0, padx=10)
         ctk.CTkButton(button_frame, text="Экспорт в Excel", command=self.controller.export_data).grid(row=0, column=1, padx=10)
         ctk.CTkButton(button_frame, text="Добавить модель", command=self.open_formula_builder).grid(row=0, column=2, padx=10)
         ctk.CTkButton(button_frame, text="Построить график", command=self.open_graph_builder).grid(row=0, column=3, padx=10)
@@ -72,7 +75,7 @@ class MainView(ctk.CTk):
 
     def build_table_headers(self):
         self.headers = ["Страна", "Год", "ВВП (млн USD)", "Военные расходы (млн USD)",
-                        "Совокупная мощь по Чин-Лунгу", "Индекс национального потенциала"] + self.user_models
+                        "Совокупная мощь по Чин Лунгу", "Индекс национального потенциала"] + self.user_models
         self.header_widgets.clear()
 
         for col, header in enumerate(self.headers):
@@ -130,10 +133,123 @@ class MainView(ctk.CTk):
         except Exception as e:
             self.notify(f"Ошибка при сортировке: {e}")
 
+    def on_add_country(self):
+        country_name = self.country_combobox.get()
+        selected_year = int(self.year_combobox.get())
+        self.check_and_ask_user_models(country_name, selected_year)
+
+    def add_country_threaded(self, country_name, selected_year):
+        if self.country_addition_in_progress:
+            return
+
+        self.country_addition_in_progress = True
+        self.show_loading()
+        self.add_country_button.configure(state="disabled")
+
+        def task():
+            try:
+                self.controller.add_country(country_name, selected_year)
+            finally:
+                self.after(0, self.hide_loading)
+                self.after(0, lambda: self.add_country_button.configure(state="normal"))
+                self.country_addition_in_progress = False
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def show_loading(self):
+        if self.loading_label:
+            self.loading_label.destroy()
+
+        self.loading_label = ctk.CTkLabel(self.scrollable_frame, text="Загрузка...", text_color="gray")
+        self.loading_label.grid(row=1000, column=0, columnspan=len(self.headers), pady=10)
+        self.loading_running = True
+        self.loading_thread = threading.Thread(target=self.loading_animation, daemon=True)
+        self.loading_thread.start()
+
+    def hide_loading(self):
+        self.loading_running = False
+        if self.loading_label:
+            self.after(0, self.loading_label.destroy)
+            self.loading_label = None
+
+    def loading_animation(self):
+        messages = itertools.cycle(["Обработка данных...", "Осталось совсем чуть-чуть..."])
+        dots = itertools.cycle(["", ".", "..", "..."])
+        while self.loading_running:
+            text = next(messages) + next(dots)
+            if self.loading_label:
+                self.loading_label.configure(text=text)
+            time.sleep(1)
+
+        def check_and_ask_user_models(self, country_name, selected_year):
+            if not self.controller.has_user_models():
+                self.add_country_threaded(country_name, selected_year)
+                return
+
+            models = self.controller.get_user_model_names()
+            if not models:
+                self.add_country_threaded(country_name, selected_year)
+                return
+
+            self.ask_user_to_select_models(models, country_name, selected_year)
+
+    def check_and_ask_user_models(self, country_name, selected_year):
+        if self.user_model_prompt_shown:
+            self.add_country_threaded(country_name, selected_year)
+            return
+
+        self.user_model_prompt_shown = True
+
+        if not self.controller.has_user_models():
+            self.add_country_threaded(country_name, selected_year)
+            return
+
+        models = self.controller.get_user_model_names()
+        if not models:
+            self.add_country_threaded(country_name, selected_year)
+            return
+
+        self.ask_user_to_select_models(models, country_name, selected_year)
+
+    def ask_user_to_select_models(self, model_names, country_name, selected_year):
+            popup = ctk.CTkToplevel(self)
+            popup.geometry("400x400")
+            popup.title("Выберите модели для загрузки")
+            popup.attributes("-topmost", True)
+            popup.grab_set()
+
+            label = ctk.CTkLabel(popup, text="Выберите пользовательские модели:", font=("Arial", 14))
+            label.pack(pady=10)
+
+            checkbox_vars = {}
+            for name in model_names:
+                var = ctk.BooleanVar(value=True)
+                checkbox_vars[name] = var
+                checkbox = ctk.CTkCheckBox(popup, text=name, variable=var)
+                checkbox.pack(anchor="w", padx=20)
+
+            def on_load():
+                selected = [name for name, var in checkbox_vars.items() if var.get()]
+                popup.destroy()
+                self.controller.load_selected_user_models(selected)
+                self.add_country_threaded(country_name, selected_year)
+
+            def on_skip():
+                popup.destroy()
+                self.add_country_threaded(country_name, selected_year)
+
+            btn_frame = ctk.CTkFrame(popup)
+            btn_frame.pack(pady=10)
+
+            ctk.CTkButton(btn_frame, text="Загрузить выбранные", command=on_load).pack(side="left", padx=10)
+            ctk.CTkButton(btn_frame, text="Пропустить", fg_color="gray", command=on_skip).pack(side="left", padx=10)
+
+        # вызов уведомления
     def notify(self, message):
         self.last_notification = message
         self.show_popup_notification(message)
 
+    # вывод всплывающего уведомления
     def show_popup_notification(self, message):
         if hasattr(self, 'temp_popup') and self.temp_popup and self.temp_popup.winfo_exists():
             self.temp_popup.destroy()
@@ -165,54 +281,19 @@ class MainView(ctk.CTk):
 
             ok_button = ctk.CTkButton(self.popup, text="OK", command=self.popup.destroy)
             ok_button.pack(pady=(0, 10))
-
-    def loading_animation(self):
-        messages = itertools.cycle(["Обработка данных...", "Осталось совсем чуть-чуть..."])
-        dots = itertools.cycle(["", ".", "..", "..."])
-        while self.loading_running:
-            text = next(messages) + next(dots)
-            if self.loading_label:
-                self.loading_label.configure(text=text)
-            time.sleep(0.7)
-
-    def show_loading(self):
-        if self.loading_label:
-            self.loading_label.destroy()
-
-        self.loading_label = ctk.CTkLabel(self.scrollable_frame, text="Загрузка...", text_color="gray")
-        self.loading_label.grid(row=1000, column=0, columnspan=len(self.headers), pady=10)
-        self.loading_running = True
-        self.loading_thread = threading.Thread(target=self.loading_animation, daemon=True)
-        self.loading_thread.start()
-
-    def hide_loading(self):
-        self.loading_running = False
-        if self.loading_label:
-            self.loading_label.destroy()
-            self.loading_label = None
-
-    def on_add_country(self):
-        country_name = self.country_combobox.get()
-        selected_year = int(self.year_combobox.get())
-        self.show_loading()
-
-        def task():
-            self.controller.add_country(country_name, selected_year)
-            self.hide_loading()
-
-        threading.Thread(target=task, daemon=True).start()
-
     def open_graph_builder(self):
+        from views.graph_builder import GraphBuilder
         GraphBuilder(self, self.controller)
-
     def open_formula_builder(self):
         from views.formula_builder_view import FormulaBuilderView
         all_metrics = [
             "ВВП", "Военные расходы", "Экономическая сила", "Военная сила",
-            "Критическая масса", "Совокупная мощь по Чин-Лунгу", "ВВП ППС", "ВВП ППС на душу",
+            "Критическая масса", "Совокупная мощь по Чин Лунгу", "ВВП ППС", "ВВП ППС на душу",
             "Население", "Площадь", "Глобальный ВВП", "Глобальные военные расходы",
             "Глобальный ВВП ППС на душу", "Глобальное население",
             "Часть ВР", "Часть ВВП", "Часть ВВП ППС", "Часть населения",
             "Индекс национального потенциала"
         ]
-        FormulaBuilderView(self, all_metrics, self.controller.add_user_model)
+        FormulaBuilderView(self, all_metrics, self.controller.add_user_model, self.controller)
+
+

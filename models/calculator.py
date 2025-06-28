@@ -69,7 +69,7 @@ class Calculator:
             "Экономическая сила": economic_strength,
             "Военная сила": military_strength,
             "Критическая масса": critical_mass,
-            "Совокупная мощь по Чин-Лунгу": power_chin_lung,
+            "Совокупная мощь по Чин Лунгу": power_chin_lung,
             "ВВП ППС": gdp_ppp,
             "ВВП ППС на душу": gdp_ppp_per_capita,
             "Население": population,

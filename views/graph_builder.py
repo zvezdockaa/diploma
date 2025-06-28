@@ -12,6 +12,9 @@ class GraphBuilder(ctk.CTkToplevel):
         self.geometry("600x400")
         self.controller = controller
         self.selected_mode = tk.StringVar(value="by_years")  # режим отображения графика
+        self.attributes("-topmost", True)
+        self.focus_force()
+        self.grab_set()
 
         self.build_ui()
 
@@ -118,14 +121,16 @@ class GraphBuilder(ctk.CTkToplevel):
             ax.set_ylabel(indicator)
 
         # отображение графика в новом окне
-        graph_window = ctk.CTkToplevel(self)
+        graph_window = ctk.CTkToplevel()
         graph_window.title("График")
+        graph_window.geometry("800x600")
+        graph_window.attributes("-topmost", True)
 
         canvas = FigureCanvasTkAgg(fig, master=graph_window)
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True)
 
-        # кнопка сохранения графика в картинку пнг
+        # кнопка сохранения графика в картинку
         def save_graph():
             file_path = filedialog.asksaveasfilename(
                 defaultextension=".png",
